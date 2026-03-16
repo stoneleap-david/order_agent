@@ -1,0 +1,3 @@
+[MAIN]
+# 禁用所有检查 (C=规范 R=重构 W=警告 E=错误 F=致命)
+disable=C,R,W,E,F

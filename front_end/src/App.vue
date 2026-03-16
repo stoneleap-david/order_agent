@@ -1,18 +1,149 @@
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { chatAPI, deliveryAPI, menuAPI } from './api/index'
+import type { DeliveryResponse, MenuItem } from './api/index'
+
+// 智能对话相关
+const chatQuery = ref('')
+const chatResponse = ref('')
+const chatLoading = ref(false)
+
+// 配送查询相关
+const deliveryAddress = ref('')
+const travelMode = ref('2')
+const deliveryResponse = ref<DeliveryResponse | null>(null)
+const deliveryLoading = ref(false)
+
+// 菜品列表相关
+const menuItems = ref<MenuItem[]>([])
+const menuLoading = ref(false)
+const highlightedItems = ref<string[]>([])
+
+const formattedResponse = computed(() => {
+  if (!chatResponse.value) return ''
+
+  return chatResponse.value
+    .replace(/#{1,6} (.*?)$/gm, (match: string, p1: string) => {
+      const level = match.trim().split(' ')[0].length
+      return `<h${level}>${p1}</h${level}>`
+    })
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^- (.*?)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*?<\/li>)\n(<li>.*?<\/li>)/gs, '<ul>$1$2</ul>')
+    .replace(/^\d+\. (.*?)$/gm, '<li>$1</li>')
+    .replace(/\n\n(.*?)\n\n/gs, '<p>$1</p>')
+    .replace(/\n/g, '<br/>')
+})
+
+const highlightRecommendedItems = (menuIds: string[]) => {
+  if (!menuIds || !Array.isArray(menuIds) || menuIds.length === 0) {
+    highlightedItems.value = []
+    return
+  }
+
+  highlightedItems.value = menuIds.map((id) => id.toString())
+
+  if (menuItems.value.length === 0) {
+    loadMenuItems()
+  }
+
+  setTimeout(() => {
+    const menuSection = document.querySelector('.menu-section')
+    if (menuSection) {
+      menuSection.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, 300)
+}
+
+const sendChatQuery = async () => {
+  if (!chatQuery.value.trim()) return
+
+  chatLoading.value = true
+  chatResponse.value = ''
+  try {
+    const response = await chatAPI.sendMessage(chatQuery.value)
+
+    if (response.recommendation) {
+      chatResponse.value = response.recommendation
+      console.log('推荐菜品ID:', response.menu_ids)
+      highlightRecommendedItems(response.menu_ids ?? [])
+    } else if (response.response) {
+      chatResponse.value = response.response
+    } else {
+      chatResponse.value = '抱歉，我无法理解您的问题。'
+    }
+  } catch (error) {
+    chatResponse.value = '正在处理您的请求，请稍等片刻...'
+    console.log('智能对话请求详情:', (error as Error).message)
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+const checkDelivery = async () => {
+  if (!deliveryAddress.value.trim()) return
+
+  deliveryLoading.value = true
+  try {
+    const response = await deliveryAPI.checkRange(deliveryAddress.value, travelMode.value)
+    deliveryResponse.value = response
+  } catch {
+    deliveryResponse.value = {
+      success: false,
+      in_range: false,
+      message: '查询失败，请稍后再试',
+      distance: 0,
+      formatted_address: '',
+      duration: 0,
+      travel_mode: travelMode.value,
+      input_address: deliveryAddress.value,
+    }
+  } finally {
+    deliveryLoading.value = false
+  }
+}
+
+const loadMenuItems = async () => {
+  menuLoading.value = true
+  try {
+    const response = await menuAPI.getMenuList()
+    menuItems.value = response.menu_items || []
+  } catch (error) {
+    console.error('加载菜品失败:', error)
+    menuItems.value = []
+  } finally {
+    menuLoading.value = false
+  }
+}
+
+const getSpiceColor = (level: number): string => {
+  const colors = ['', 'green', 'orange', 'red']
+  return colors[level] || ''
+}
+
+onMounted(() => {
+  loadMenuItems()
+})
+</script>
+
 <template>
   <div id="app">
     <a-layout class="main-container">
-      <a-layout-header class="header">
-      </a-layout-header>
-      
+      <a-layout-header class="header"> </a-layout-header>
+
       <a-layout-content class="main-content">
         <!-- 智能对话区域 -->
-        <a-card class="chat-section" hoverable>
+        <a-card
+          class="chat-section"
+          hoverable
+        >
           <template #title>
             <div class="card-header">
               <span>智能点餐助手</span>
             </div>
           </template>
-          
+
           <div class="chat-input-area">
             <a-textarea
               v-model:value="chatQuery"
@@ -22,16 +153,19 @@
             />
             <a-button
               type="primary"
-              @click="sendChatQuery"
               :loading="chatLoading"
               class="chat-button"
+              @click="sendChatQuery"
             >
               {{ chatLoading ? '思考中...' : '询问' }}
             </a-button>
           </div>
-          
+
           <!-- 对话结果显示 -->
-          <div v-if="chatLoading" class="chat-loading">
+          <div
+            v-if="chatLoading"
+            class="chat-loading"
+          >
             <a-textarea
               value="AI助手正在思考中，请稍候..."
               :rows="3"
@@ -39,26 +173,36 @@
               class="chat-output"
             />
           </div>
-          
-          <div v-else-if="chatResponse" class="chat-response">
+
+          <div
+            v-else-if="chatResponse"
+            class="chat-response"
+          >
             <div class="formatted-container">
-              <div v-html="formattedResponse" class="formatted-content"></div>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div
+                class="formatted-content"
+                v-html="formattedResponse"
+              ></div>
             </div>
           </div>
         </a-card>
 
         <!-- 配送范围查询区域 -->
-        <a-card class="delivery-section" hoverable>
+        <a-card
+          class="delivery-section"
+          hoverable
+        >
           <template #title>
             <div class="card-header">
               <span>配送范围查询</span>
             </div>
           </template>
-          
+
           <div class="delivery-input-area">
             <a-input
               v-model:value="deliveryAddress"
-              placeholder="请输入您的地址，例如：'北京市海淀区中关村大街1号'"
+              placeholder="请输入您的地址，例如：'无锡英臻科技股份有限公司'"
               class="delivery-input"
             />
             <a-select
@@ -72,51 +216,73 @@
             </a-select>
             <a-button
               type="primary"
-              @click="checkDelivery"
               :loading="deliveryLoading"
               class="delivery-button"
+              @click="checkDelivery"
             >
               查询配送范围
             </a-button>
           </div>
-          
+
           <!-- 配送查询结果 -->
-          <div v-if="deliveryResponse" class="delivery-response">
+          <div
+            v-if="deliveryResponse"
+            class="delivery-response"
+          >
             <a-alert
               :message="deliveryResponse.message"
               :type="deliveryResponse.in_range ? 'success' : 'warning'"
               show-icon
             />
-            <div v-if="deliveryResponse.distance" class="delivery-details">
-              <p>距离: <span style="color: red">{{ deliveryResponse.distance.toFixed(2) }}</span> 公里</p>
-              <p>时间: <span style="color: red">{{ Math.floor(deliveryResponse.duration / 60) }}</span> 分钟 <span style="color: red">{{ deliveryResponse.duration % 60 }}</span> 秒</p>
+            <div
+              v-if="deliveryResponse.distance"
+              class="delivery-details"
+            >
+              <p>
+                距离:
+                <span style="color: red">{{ deliveryResponse.distance.toFixed(2) }}</span> 公里
+              </p>
+              <p>
+                时间:
+                <span style="color: red">{{ Math.floor(deliveryResponse.duration / 60) }}</span>
+                分钟
+                <span style="color: red">{{ deliveryResponse.duration % 60 }}</span> 秒
+              </p>
               <p>地址: {{ deliveryResponse.formatted_address }}</p>
             </div>
           </div>
         </a-card>
 
         <!-- 菜品列表区域 -->
-        <a-card class="menu-section" hoverable>
+        <a-card
+          class="menu-section"
+          hoverable
+        >
           <template #title>
             <div class="card-header">
               <span>菜品列表</span>
               <a-button
                 type="primary"
                 size="small"
-                @click="loadMenuItems"
                 :loading="menuLoading"
+                @click="loadMenuItems"
               >
                 刷新菜单
               </a-button>
             </div>
           </template>
-          
-          <div v-if="menuItems.length > 0" class="menu-grid">
+
+          <div
+            v-if="menuItems.length > 0"
+            class="menu-grid"
+          >
             <div
               v-for="item in menuItems"
               :key="item.id"
               class="menu-item"
-              :class="{ 'menu-item-highlighted': highlightedItems.includes(item.id.toString()) }"
+              :class="{
+                'menu-item-highlighted': highlightedItems.includes(item.id.toString()),
+              }"
             >
               <div class="menu-item-header">
                 <h3>{{ item.dish_name }}</h3>
@@ -129,7 +295,10 @@
                   <a-tag :color="getSpiceColor(item.spice_level)">
                     {{ item.spice_text }}
                   </a-tag>
-                  <a-tag v-if="item.is_vegetarian" color="green">
+                  <a-tag
+                    v-if="item.is_vegetarian"
+                    color="green"
+                  >
                     素食
                   </a-tag>
                   <a-tag
@@ -142,174 +311,28 @@
               </div>
             </div>
           </div>
-          
-          <div v-else-if="!menuLoading" class="empty-menu">
+
+          <div
+            v-else-if="!menuLoading"
+            class="empty-menu"
+          >
             <a-empty description="暂无菜品数据" />
           </div>
-          
-          <div v-if="menuLoading" class="loading-menu">
-            <a-skeleton :paragraph="{ rows: 3 }" active />
+
+          <div
+            v-if="menuLoading"
+            class="loading-menu"
+          >
+            <a-skeleton
+              :paragraph="{ rows: 3 }"
+              active
+            />
           </div>
         </a-card>
       </a-layout-content>
     </a-layout>
   </div>
 </template>
-
-<script>
-import { ref, onMounted, computed } from 'vue'
-import { chatAPI, deliveryAPI, menuAPI } from './api/index.js'
-
-export default {
-  name: 'App',
-  setup() {
-    // 智能对话相关
-    const chatQuery = ref('')
-    const chatResponse = ref('')
-    const chatLoading = ref(false)
-
-    // 配送查询相关
-    const deliveryAddress = ref('')
-    const travelMode = ref("2")
-    const deliveryResponse = ref(null)
-    const deliveryLoading = ref(false)
-
-    // 菜品列表相关
-    const menuItems = ref([])
-    const menuLoading = ref(false)
-    const highlightedItems = ref([])
-
-    const formattedResponse = computed(() => {
-      if (!chatResponse.value) return '';
-      
-      let formatted = chatResponse.value
-        .replace(/#{1,6} (.*?)$/gm, (match, p1) => {
-          const level = match.trim().split(' ')[0].length;
-          return `<h${level}>${p1}</h${level}>`;
-        })
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/^- (.*?)$/gm, '<li>$1</li>')
-        .replace(/(<li>.*?<\/li>)\n(<li>.*?<\/li>)/gs, '<ul>$1$2</ul>')
-        .replace(/^\d+\. (.*?)$/gm, '<li>$1</li>')
-        .replace(/\n\n(.*?)\n\n/gs, '<p>$1</p>')
-        .replace(/\n/g, '<br/>');
-      
-      return formatted;
-    });
-
-    const highlightRecommendedItems = (menuIds) => {
-      if (!menuIds || !Array.isArray(menuIds) || menuIds.length === 0) {
-        highlightedItems.value = []
-        return
-      }
-      
-      highlightedItems.value = menuIds.map(id => id.toString())
-      
-      if (menuItems.value.length === 0) {
-        loadMenuItems()
-      }
-      
-      setTimeout(() => {
-        const menuSection = document.querySelector('.menu-section')
-        if (menuSection) {
-          menuSection.scrollIntoView({ behavior: 'smooth' })
-        }
-      }, 300)
-    }
-
-    const sendChatQuery = async () => {
-      if (!chatQuery.value.trim()) {
-        return
-      }
-      
-      chatLoading.value = true
-      chatResponse.value = ''
-      try {
-        const response = await chatAPI.sendMessage(chatQuery.value)
-        
-        if (response.recommendation) {
-          chatResponse.value = response.recommendation
-          console.log('推荐菜品ID:', response.menu_ids)
-          highlightRecommendedItems(response.menu_ids)
-        } else if (response.response) {
-          chatResponse.value = response.response
-        } else {
-          chatResponse.value = '抱歉，我无法理解您的问题。'
-        }
-      } catch (error) {
-        chatResponse.value = '正在处理您的请求，请稍等片刻...'
-        console.log('智能对话请求详情:', error.message)
-      } finally {
-        chatLoading.value = false
-      }
-    }
-
-    const checkDelivery = async () => {
-      if (!deliveryAddress.value.trim()) {
-        return
-      }
-      
-      deliveryLoading.value = true
-      try {
-        const response = await deliveryAPI.checkRange(deliveryAddress.value, travelMode.value)
-        deliveryResponse.value = response
-      } catch (error) {
-        deliveryResponse.value = {
-          success: false,
-          in_range: false,
-          message: '查询失败，请稍后再试',
-          distance: 0
-        }
-      } finally {
-        deliveryLoading.value = false
-      }
-    }
-
-    const loadMenuItems = async () => {
-      menuLoading.value = true
-      try {
-        const response = await menuAPI.getMenuList()
-        menuItems.value = response.menu_items || []
-      } catch (error) {
-        console.error('加载菜品失败:', error)
-        menuItems.value = []
-      } finally {
-        menuLoading.value = false
-      }
-    }
-
-    // Ant Design Vue a-tag uses color strings instead of type enums
-    const getSpiceColor = (level) => {
-      const colors = ['', 'green', 'orange', 'red']
-      return colors[level] || ''
-    }
-
-    onMounted(() => {
-      loadMenuItems()
-    })
-
-    return {
-      chatQuery,
-      chatResponse,
-      chatLoading,
-      deliveryAddress,
-      travelMode,
-      deliveryResponse,
-      deliveryLoading,
-      menuItems,
-      menuLoading,
-      highlightedItems,
-      sendChatQuery,
-      checkDelivery,
-      loadMenuItems,
-      getSpiceColor,
-      highlightRecommendedItems,
-      formattedResponse
-    }
-  }
-}
-</script>
 
 <style>
 /* 主容器样式 */
@@ -319,7 +342,6 @@ export default {
   margin: 0 auto;
 }
 
-/* 头部样式 */
 .header {
   background-color: #1677ff;
   color: white;
@@ -329,7 +351,6 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 主内容区域 */
 .main-content {
   padding: 20px;
   display: flex;
@@ -339,14 +360,12 @@ export default {
   overflow-x: hidden;
 }
 
-/* 卡片头部 */
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* 聊天区域 */
 .chat-section {
   width: 100%;
   overflow: hidden;
@@ -478,7 +497,6 @@ export default {
   text-decoration: underline;
 }
 
-/* 配送区域 */
 .delivery-input-area {
   display: flex;
   flex-wrap: wrap;
@@ -506,7 +524,6 @@ export default {
   margin-top: 10px;
 }
 
-/* 菜品列表 */
 .menu-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -611,7 +628,6 @@ export default {
     line-height: 48px;
   }
 
-  /* 对话区域: 纵向排列 */
   .chat-input-area {
     flex-direction: column;
     gap: 8px;
@@ -626,7 +642,6 @@ export default {
     padding: 12px;
   }
 
-  /* 配送区域: 纵向排列 */
   .delivery-input-area {
     flex-direction: column;
     gap: 10px;
@@ -650,7 +665,6 @@ export default {
     margin-bottom: 0;
   }
 
-  /* 菜品列表: 单列 */
   .menu-grid {
     grid-template-columns: 1fr;
     gap: 12px;

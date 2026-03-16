@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{js,vue,css,html}\""
+    "type-check": "vue-tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,vue,css,html}\""
   },
   "dependencies": {
     "ant-design-vue": "3.2.20",
@@ -16,6 +17,8 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.5",
     "prettier": "^3.8.1",
+    "typescript": "~5.8.0",
+    "vue-tsc": "^2.0.0",
     "vite": "^8.0.0"
   }
 }

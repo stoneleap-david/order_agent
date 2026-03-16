@@ -15,20 +15,12 @@ def load_prompt_template(prompt_file_name) -> str:
     """加载指定目录下的提示词文件"""
     try:
         # 1.定位到当前文件的路径
-        current_file_path = os.path.abspath(
-            __file__
-        )  # D:\\develop\\develop\\workspace\\pycharm\\bj250716\\smart_diancan\\agent\\mcp.py
-        current_file_dir = os.path.dirname(
-            current_file_path
-        )  # D:\\develop\\develop\\workspace\\pycharm\\bj250716\\smart_diancan\\agent
-        project_dir = os.path.dirname(
-            current_file_dir
-        )  # D:\\develop\\develop\\workspace\\pycharm\\bj250716\\smart_diancan
+        current_file_path = os.path.abspath(__file__)
+        current_file_dir = os.path.dirname(current_file_path)
+        project_dir = os.path.dirname(current_file_dir)
 
         # 2.拼接提示词完整路径
-        prompt_path = os.path.join(
-            project_dir, "prompt", f"{prompt_file_name}.txt"
-        )  # D:\\develop\\develop\\workspace\\pycharm\\bj250716\\smart_diancan\\prompt\\general_inquiry.txt
+        prompt_path = os.path.join(project_dir, "prompt", f"{prompt_file_name}.txt")
 
         # 3.读取指定路径文件下的文件
         with open(prompt_path, "r", encoding="utf-8") as f:

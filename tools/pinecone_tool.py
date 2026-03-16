@@ -25,14 +25,13 @@ class PineconeVectorDB:
     """PineCone向量数据库的操作"""
 
     def __init__(self):
-        self.pinecone_api_key = os.getenv(
-            "PINECONE_API_KEY",
-            "pcsk_438teh_QavQpvLarFGgtS1E9MPDqEq4dmzkzs8dj7xxU5rVGMkb5gj8v8eWAeZ3fwAzcY5",
-        )
-        self.dashscope_api_key = os.getenv(
-            "DASHSCOPE_API_KEY", "sk-26d57c968c364e7bb14f1fc350d4bff0"
-        )
-        self.pinecone_env = os.getenv("PINECONE_ENV", "us-east-1")
+        self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
+        self.dashscope_api_key = os.getenv("DASHSCOPE_API_KEY")
+        self.pinecone_env = os.getenv("PINECONE_ENV")
+
+        logger.info(f"pinecone_api_key: {self.pinecone_api_key}")
+        logger.info(f"dashscope_api_key: {self.dashscope_api_key}")
+        logger.info(f"pinecone_env: {self.pinecone_env}")
 
         # 配置索引名字、嵌入模型名字、嵌入模型的维度
         self.index_name = "menu-item-index"
